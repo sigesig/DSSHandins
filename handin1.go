@@ -122,7 +122,7 @@ func writer(cs *connStruct, messagesSent *map[string]bool, channel <-chan string
 		// only if this msg has not been sent before will it be sent
 		if (*messagesSent)[msg] == false {
 			// prints the msg to the terminal only if it has not been sent before
-			print(msg)
+			print(msg[:len(msg)-11] + "\n")
 			for _, client := range (*cs).connections {
 				client.Write([]byte(msg))
 			}
@@ -158,7 +158,7 @@ func readTerminalInput(channel chan<- string) {
 		}
 
 		// write input to channel
-		channel <- msg
+		channel <- (msg[:len(msg)-1] + strconv.FormatInt(time.Now().Unix(), 10) + "\n")
 	}
 }
 
