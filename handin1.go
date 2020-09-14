@@ -16,12 +16,8 @@ func main() {
 	fmt.Scanln(&peerAddress)
 	d := net.Dialer{Timeout: 60 * time.Second}
 	conn, err := d.Dial("tcp", peerAddress)
-	if err != nil {
-		print("No connection established, starting own network.")
-		startOwnNetwork()
-	}
-	fmt.Printf("Connection to %s established\n", peerAddress)
-	appendNetwork(conn)
+
+	mainNetworkFunc(conn, err)
 }
 
 // construct to hold connections slice
@@ -29,77 +25,50 @@ type connStruct struct {
 	connections []net.Conn
 }
 
-func appendNetwork(parent net.Conn) {
-	ln, err := net.Listen("tcp", ":0")
-
-	// standard boilerplate for catching errors
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//get outbound IP address
+func printIPAndPortInformation(ln net.Listener) {
 	ipAddress := GetOutboundIP()
-
-	//get the port the listener is currently listening on
 	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
 	ipAndPort := ipAddress + ":" + port + "\n"
 	fmt.Printf("Listening for connections on IP:port " + ipAndPort)
+}
+
+func addNewConnection(cs *connStruct, connection net.Conn, channel chan string) {
+	(*cs).connections = append((*cs).connections, connection)
+	go listener(connection, channel)
+}
+
+func mainNetworkFunc(parent net.Conn, err error) {
+	ln, listenerErr := net.Listen("tcp", ":0")
+
+	// standard boilerplate for catching errors
+	if listenerErr != nil {
+		log.Fatal(listenerErr)
+	}
+
+	printIPAndPortInformation(ln)
 
 	// channel used to communicate between writer and listener
 	channel := make(chan string)
 	cs := connStruct{make([]net.Conn, 0)}
 
 	//add parent node to connections and create listener:
-	cs.connections = append(cs.connections, parent)
-
 	messagesSent := make(map[string]bool)
 
-	go listener(parent, channel)
+	// add writer and terminal reader to this node so it can send messages
 	go writer(&cs, &messagesSent, channel)
 	go readTerminalInput(channel)
+
+	// if parent was found, connect to it
+	if err == nil {
+		print("Succesfully connected")
+		addNewConnection(&cs, parent, channel)
+	}
 
 	// listen for new connections
 	for {
 		conn, _ := ln.Accept()
-		cs.connections = append(cs.connections, conn)
+		addNewConnection(&cs, conn, channel)
 		sendPreviousMessages(conn, messagesSent)
-		go listener(conn, channel)
-	}
-}
-
-// this starts a peer to peer network on this computer
-func startOwnNetwork() {
-	ln, err := net.Listen("tcp", ":0")
-
-	// standard boilerplate for catching errors
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//get outbound IP address
-	ipAddress := GetOutboundIP()
-
-	//get the port the listener is currently listening on
-	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
-	ipAndPort := ipAddress + ":" + port
-	fmt.Printf("Listening for connections on IP:port " + ipAndPort)
-
-	// channel used to communicate between writer and listener
-	channel := make(chan string)
-	cs := connStruct{make([]net.Conn, 0)}
-
-	messagesSent := make(map[string]bool)
-
-	go writer(&cs, &messagesSent, channel)
-	go readTerminalInput(channel)
-
-	for {
-		conn, _ := ln.Accept()
-		print("Connection established.\n")
-		cs.connections = append(cs.connections, conn)
-		sendPreviousMessages(conn, messagesSent)
-
-		go listener(conn, channel)
 	}
 }
 
@@ -158,10 +127,12 @@ func readTerminalInput(channel chan<- string) {
 		}
 
 		// write input to channel
+
 		channel <- (msg[:len(msg)-1] + strconv.FormatInt(time.Now().Unix(), 10) + "\n")
 	}
 }
 
+// gets outboundIP
 func GetOutboundIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
