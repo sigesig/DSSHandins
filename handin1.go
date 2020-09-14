@@ -50,8 +50,6 @@ func mainNetworkFunc(parent net.Conn, err error) {
 	// channel used to communicate between writer and listener
 	channel := make(chan string)
 	cs := connStruct{make([]net.Conn, 0)}
-
-	//add parent node to connections and create listener:
 	messagesSent := make(map[string]bool)
 
 	// add writer and terminal reader to this node so it can send messages
@@ -60,7 +58,7 @@ func mainNetworkFunc(parent net.Conn, err error) {
 
 	// if parent was found, connect to it
 	if err == nil {
-		print("Succesfully connected")
+		print("Succesfully connected \n")
 		addNewConnection(&cs, parent, channel)
 	}
 
@@ -127,12 +125,13 @@ func readTerminalInput(channel chan<- string) {
 		}
 
 		// write input to channel
-
-		channel <- (msg[:len(msg)-1] + strconv.FormatInt(time.Now().Unix(), 10) + "\n")
+		msgWithTimestamp := msg[:len(msg)-1] + strconv.FormatInt(time.Now().Unix(), 10) + "\n"
+		channel <- msgWithTimestamp
 	}
 }
 
-// gets outboundIP
+//gets outboundIP
+//Gotten from here https://github.com/blatchley/dist-sys-Golang/blob/master/Networking/basicgob/basicgob.go
 func GetOutboundIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
